@@ -19,7 +19,7 @@ module Deps = struct
   let pid () = Unix.getpid ()
 
 
-  type allocation = Gc.Memprof.allocation = private
+  type allocation = (*Gc.Memprof.allocation =*) private
     { n_samples : int;
       size : int;
       unmarshalled : bool;
@@ -35,15 +35,16 @@ module Deps = struct
     ~major_dealloc_callback
     ~sampling_rate
     () : unit =
-(*
+
     ignore (callstack_size, minor_alloc_callback, major_alloc_callback,
             promote_callback, minor_dealloc_callback, major_dealloc_callback, sampling_rate);
     assert false
-*)
+(*
     Gc.Memprof.start ~callstack_size ~minor_alloc_callback ~major_alloc_callback
       ~promote_callback ~minor_dealloc_callback ~major_dealloc_callback ~sampling_rate
       ()
-  let memprof_stop () : unit = Gc.Memprof.stop ()
+*)
+  let memprof_stop () : unit = (*Gc.Memprof.stop*) ()
 
 end
 
@@ -414,7 +415,7 @@ let put_backtrace_slot b file_mtf defn_mtfs (id, loc) =
       | None -> []
       | Some slot -> get_locations slot in
     let slot = convert_raw_backtrace_slot slot in
-    match Slot.location slot, Slot.name slot with
+    match Slot.location slot, (*Slot.name slot*) None with
     | None, _ -> tail
     | Some l, None -> (l, "??") :: tail
     | Some l, Some d -> (l,d) :: tail in
