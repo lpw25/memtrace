@@ -16,6 +16,12 @@ module type Char = sig
 
 end
 
+let lookups = ref 0
+let lookups_length = 32
+let lookups_by_size = Array.make lookups_length 0
+let other_lookups = ref 0
+let max_lookup = ref 0
+
 module Substring_heavy_hitters (X : Char) : sig
 
   type t
@@ -518,9 +524,26 @@ end = struct
       match t.kind with
       | Dummy | Front_sentinal _ | Back_sentinal _ -> assert false
       | Leaf _ | Suffix_leaf _ -> None
-      | Thin_branch { children; _ } ->
+      | Thin_branch { children; no_of_children; _ } ->
+          incr lookups;
+          if no_of_children > !max_lookup then max_lookup := no_of_children;
+          if no_of_children < lookups_length then
+            lookups_by_size.(no_of_children)
+              <- lookups_by_size.(no_of_children) + 1
+          else
+            incr other_lookups;
           find_child_in_list children char
-      | Root { children; _ } | Branch { children; _ } ->
+      | Branch { children; _ } ->
+          let no_of_children = Tbl.length children in
+          incr lookups;
+          if no_of_children > !max_lookup then max_lookup := no_of_children;
+          if no_of_children < lookups_length then
+            lookups_by_size.(no_of_children)
+              <- lookups_by_size.(no_of_children) + 1
+          else
+            incr other_lookups;
+          Tbl.find_opt children char
+      | Root { children; _ } ->
           Tbl.find_opt children char
 
     let rec get_child_in_list cl char =
@@ -531,8 +554,29 @@ end = struct
       match t.kind with
       | Dummy | Front_sentinal _ | Back_sentinal _ -> assert false
       | Leaf _ | Suffix_leaf _ -> failwith "get_child: No children"
-      | Thin_branch { children; _ } -> get_child_in_list children char
-      | Root { children; _ } | Branch { children; _ } ->
+      | Thin_branch { children; no_of_children; _ } ->
+          incr lookups;
+          if no_of_children > !max_lookup then max_lookup := no_of_children;
+          if no_of_children < lookups_length then
+            lookups_by_size.(no_of_children)
+              <- lookups_by_size.(no_of_children) + 1
+          else
+            incr other_lookups;
+          get_child_in_list children char
+      | Branch { children; _ } -> begin
+          let no_of_children = Tbl.length children in
+          incr lookups;
+          if no_of_children > !max_lookup then max_lookup := no_of_children;
+          if no_of_children < lookups_length then
+            lookups_by_size.(no_of_children)
+              <- lookups_by_size.(no_of_children) + 1
+          else
+            incr other_lookups;
+          match Tbl.find children char with
+          | child -> child
+          | exception Not_found -> failwith "get_child: No such child"
+        end
+      | Root { children; _ } ->
           match Tbl.find children char with
           | child -> child
           | exception Not_found -> failwith "get_child: No such child"
@@ -1235,6 +1279,23 @@ let count ~frequency ~error ~filename =
              extension ~count:nsamples
       | Promote _ -> ()
       | Collect _ -> ());
+  Format.printf "Lookups: %d\n" !lookups;
+  for i = 0 to lookups_length - 1 do
+    let percentage =
+      (Float.of_int lookups_by_size.(i)  /. Float.of_int !lookups)
+      *. 100.0
+    in
+    Format.printf "Lookups of length %d: %d (%4.1f%%)\n"
+      i lookups_by_size.(i) percentage
+  done;
+  let other_percentage =
+    (Float.of_int !other_lookups  /. Float.of_int !lookups)
+    *. 100.0
+  in
+  Format.printf "Lookups of length at least %d: %d (%4.1f%%)\n"
+    lookups_length !other_lookups other_percentage;
+  Format.printf "Largest lookups: %d\n" !max_lookup;
+    !nodes !compressions avg_nodes_before avg_nodes_after;
   let results = Loc_hitters.output shh ~frequency in
   Format.printf "%a" (print_report trace) results;
   close_trace trace
