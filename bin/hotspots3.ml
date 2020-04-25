@@ -16,6 +16,11 @@ module type Char = sig
 
 end
 
+let nodes = ref 0
+let compressions = ref 0
+let nodes_before_compressions = ref 0
+let nodes_after_compressions = ref 0
+
 let lookups = ref 0
 let lookups_length = 32
 let lookups_by_size = Array.make lookups_length 0
@@ -425,6 +430,7 @@ end = struct
           false
 
     let add_leaf t ~queue ~array ~index =
+      incr nodes;
       let edge_array = array in
       let edge_start = index in
       let edge_len = (Array.length array) - index in
@@ -448,6 +454,7 @@ end = struct
       node
 
     let add_suffix_leaf t ~array ~index =
+      incr nodes;
       let edge_array = array in
       let edge_start = index in
       let edge_len = (Array.length array) - index in
@@ -475,6 +482,7 @@ end = struct
     let split_edge ~parent ~child ~len =
       if (len = 0) then parent
       else begin
+        incr nodes;
         let edge_array = child.edge_array in
         let edge_start = child.edge_start in
         let edge_key = child.edge_key in
@@ -730,6 +738,7 @@ end = struct
           Tbl.fold (fun _ n -> f n) children acc
 
     let rec squash_detached ~queue ~threshold t =
+      decr nodes;
       let parent = t.parent in
       let suffix = t.suffix_link in
       let count = t.count in
@@ -1020,9 +1029,12 @@ end = struct
     done
 
   let compress t =
+    incr compressions;
+    nodes_before_compressions := !nodes_before_compressions + !nodes;
     let queue = t.leaves in
     let threshold = t.current_bucket in
-    Node.Queue.iter queue (Node.maybe_squash_leaf ~queue ~threshold)
+    Node.Queue.iter queue (Node.maybe_squash_leaf ~queue ~threshold);
+    nodes_after_compressions := !nodes_after_compressions + !nodes
 
   let insert t ~common_prefix array ~count =
     let len = Array.length array in
@@ -1295,9 +1307,21 @@ let count ~frequency ~error ~filename =
   Format.printf "Lookups of length at least %d: %d (%4.1f%%)\n"
     lookups_length !other_lookups other_percentage;
   Format.printf "Largest lookups: %d\n" !max_lookup;
+  let avg_nodes_before =
+    Float.of_int !nodes_before_compressions  /. Float.of_int !compressions
+  in
+  let avg_nodes_after =
+    Float.of_int !nodes_after_compressions  /. Float.of_int !compressions
+  in
+  Format.printf "Nodes: %d\nCompressions: %d\n\
+                 Average number of nodes before compressions: %4.1f\n\
+                 Average number of nodes after compressions: %4.1f\n"
     !nodes !compressions avg_nodes_before avg_nodes_after;
+(*
   let results = Loc_hitters.output shh ~frequency in
   Format.printf "%a" (print_report trace) results;
+*)
+  ignore frequency;
   close_trace trace
 
 let default_frequency = 0.03
